@@ -443,24 +443,19 @@ class TodoApp(Gtk.Application):
 				return False
 
 			todo_text = self.todos[list_name][index]
-			dialog = Gtk.MessageDialog(
-				transient_for=window,
-				modal=True,
-				message_type=Gtk.MessageType.QUESTION,
-				buttons=Gtk.ButtonsType.CANCEL,
-				text="Delete this task?",
-			)
-			dialog.set_secondary_text(todo_text)
-			delete_button = dialog.add_button("Delete", Gtk.ResponseType.ACCEPT)
-			delete_button.add_css_class("destructive-action")
+			dialog = Gtk.AlertDialog()
+			dialog.set_modal(True)
+			dialog.set_message("Delete this task?")
+			dialog.set_detail(todo_text)
+			dialog.set_buttons(("Cancel", "Delete"))
+			dialog.set_cancel_button(0)
+			dialog.set_default_button(0)
 
-			def on_response(_dialog, response_id):
-				if response_id == Gtk.ResponseType.ACCEPT:
+			def on_response(_dialog, result, _data):
+				if _dialog.choose_finish(result) == 1:
 					delete_at(list_name, index)
-				_dialog.destroy()
 
-			dialog.connect("response", on_response)
-			dialog.present()
+			dialog.choose(window, None, on_response, None)
 			return True
 
 		def delete_selected():
