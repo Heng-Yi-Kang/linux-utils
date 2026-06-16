@@ -13,3 +13,8 @@ def delete_todo(todos, list_name, index):
 def complete_todo(todos, index):
 	item = todos["active"].pop(index)
 	todos["completed"].append(item)
+
+
+def restore_todo(todos, index):
+	item = todos["completed"].pop(index)
+	todos["active"].append(item)
