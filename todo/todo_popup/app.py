@@ -390,6 +390,9 @@ class TodoApp(Gtk.Application):
 			active_button.set_active(name == "active")
 			completed_button.set_active(name == "completed")
 
+		def switch_to_next_list():
+			set_visible_list("completed" if selected_list_name() == "active" else "active")
+
 		active_button.connect("clicked", lambda _button: set_visible_list("active"))
 		completed_button.connect("clicked", lambda _button: set_visible_list("completed"))
 
@@ -405,7 +408,7 @@ class TodoApp(Gtk.Application):
 				completed_listbox,
 				complete_at,
 				restore_at,
-				delete_at,
+				confirm_delete_at,
 			)
 
 		def add_todo(_widget=None):
@@ -429,20 +432,47 @@ class TodoApp(Gtk.Application):
 			refresh()
 
 		def delete_at(list_name, index):
+			if index < 0 or index >= len(self.todos[list_name]):
+				return
 			delete_todo(self.todos, list_name, index)
 			save_todos(self.todos)
 			refresh()
+
+		def confirm_delete_at(list_name, index):
+			if index < 0 or index >= len(self.todos[list_name]):
+				return False
+
+			todo_text = self.todos[list_name][index]
+			dialog = Gtk.MessageDialog(
+				transient_for=window,
+				modal=True,
+				message_type=Gtk.MessageType.QUESTION,
+				buttons=Gtk.ButtonsType.CANCEL,
+				text="Delete this task?",
+			)
+			dialog.set_secondary_text(todo_text)
+			delete_button = dialog.add_button("Delete", Gtk.ResponseType.ACCEPT)
+			delete_button.add_css_class("destructive-action")
+
+			def on_response(_dialog, response_id):
+				if response_id == Gtk.ResponseType.ACCEPT:
+					delete_at(list_name, index)
+				_dialog.destroy()
+
+			dialog.connect("response", on_response)
+			dialog.present()
+			return True
 
 		def delete_selected():
 			selected_row = None
 			if selected_list_name() == "active":
 				selected_row = active_listbox.get_selected_row()
 				if selected_row:
-					delete_at("active", selected_row.get_index())
+					confirm_delete_at("active", selected_row.get_index())
 			else:
 				selected_row = completed_listbox.get_selected_row()
 				if selected_row:
-					delete_at("completed", selected_row.get_index())
+					confirm_delete_at("completed", selected_row.get_index())
 			return selected_row is not None
 
 		def toggle_selected():
@@ -459,6 +489,12 @@ class TodoApp(Gtk.Application):
 			return True
 
 		def key_pressed(controller, keyval, keycode, state):
+			if state & Gdk.ModifierType.CONTROL_MASK and keyval in (
+				Gdk.KEY_Tab,
+				Gdk.KEY_ISO_Left_Tab,
+			):
+				switch_to_next_list()
+				return True
 			if window.get_focus() == entry:
 				return False
 			if keyval in (Gdk.KEY_Delete, Gdk.KEY_BackSpace, Gdk.KEY_d):
