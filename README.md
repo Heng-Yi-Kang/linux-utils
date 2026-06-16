@@ -65,5 +65,6 @@ todo-popup
 ## Notes
 
 - The window is fixed size, borderless, and titled `Todo`.
-- Press Enter in the input field or click `Add` to create a todo.
-- Click `Done` next to an item to remove it from the list.
+- Press Enter in the input field to create a todo.
+- Select an active item and press Enter or Space to mark it done.
+- Select an item and press Delete, Backspace, or `d` to delete it.

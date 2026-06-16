@@ -66,17 +66,7 @@ class TodoApp(Gtk.Application):
 				label.set_xalign(0)
 				label.set_hexpand(True)
 
-				done_btn = Gtk.Button(label="Done")
-
-				def done_clicked(btn, item_index=index):
-					item = self.todos["active"].pop(item_index)
-					self.todos["completed"].append(item)
-					save_todos(self.todos)
-					refresh()
-
-				done_btn.connect("clicked", done_clicked)
 				row_box.append(label)
-				row_box.append(done_btn)
 
 				row = Gtk.ListBoxRow()
 				row.set_child(row_box)
@@ -89,16 +79,7 @@ class TodoApp(Gtk.Application):
 				label.set_xalign(0)
 				label.set_hexpand(True)
 
-				delete_btn = Gtk.Button(label="Delete")
-
-				def delete_clicked(btn, item_index=index):
-					del self.todos["completed"][item_index]
-					save_todos(self.todos)
-					refresh()
-
-				delete_btn.connect("clicked", delete_clicked)
 				row_box.append(label)
-				row_box.append(delete_btn)
 
 				row = Gtk.ListBoxRow()
 				row.set_child(row_box)
@@ -114,9 +95,6 @@ class TodoApp(Gtk.Application):
 			
 		entry.connect("activate", add_todo)
 
-		add_btn = Gtk.Button(label="Add")
-		add_btn.connect("clicked", add_todo)
-
 		def delete_selected():
 			if notebook.get_current_page() == 0:
 				selected_row = active_listbox.get_selected_row()
@@ -130,12 +108,26 @@ class TodoApp(Gtk.Application):
 				save_todos(self.todos)
 				refresh()
 
+		def complete_selected():
+			if notebook.get_current_page() != 0:
+				return False
+			selected_row = active_listbox.get_selected_row()
+			if not selected_row:
+				return False
+			item = self.todos["active"].pop(selected_row.get_index())
+			self.todos["completed"].append(item)
+			save_todos(self.todos)
+			refresh()
+			return True
+
 		def key_pressed(controller, keyval, keycode, state):
 			if window.get_focus() == entry:
 				return False
-			if keyval == Gdk.KEY_d:
+			if keyval in (Gdk.KEY_Delete, Gdk.KEY_BackSpace, Gdk.KEY_d):
 				delete_selected()
 				return True
+			if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space):
+				return complete_selected()
 			return False
 
 		key_controller = Gtk.EventControllerKey()
@@ -143,7 +135,6 @@ class TodoApp(Gtk.Application):
 		window.add_controller(key_controller)
 	
 		box.append(entry)
-		box.append(add_btn)
 		box.append(notebook)
 
 		window.set_child(box)
