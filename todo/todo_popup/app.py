@@ -151,23 +151,47 @@ window.todo-window:backdrop {{
 	color: #0d9488;
 }
 
-.segment-row {
-	background: alpha(currentColor, 0.055);
-	border-radius: 10px;
-	color: var(--todo-fg);
-	padding: 3px;
+.content-overlay {
+	background: transparent;
 }
 
-.segment-button {
-	border-radius: 8px;
+.dock-row {
+	background: alpha(@window_bg_color, 0.86);
+	border: 1px solid alpha(currentColor, 0.12);
+	border-radius: 18px;
+	box-shadow: 0 10px 28px alpha(black, 0.20);
+	color: var(--todo-fg);
+	padding: 6px;
+}
+
+.dock-button {
+	border-radius: 13px;
 	color: var(--todo-fg);
 	font-weight: 600;
-	min-height: 34px;
+	min-height: 44px;
+	min-width: 112px;
+	padding: 0 12px;
 }
 
-.segment-button:checked {
+.dock-button:checked {
 	background: #0d9488;
 	color: white;
+}
+
+.dock-button:hover {
+	background: alpha(currentColor, 0.08);
+}
+
+.dock-button:checked:hover {
+	background: #0f766e;
+}
+
+.dock-button-content {
+	padding: 2px 0;
+}
+
+.dock-label {
+	font-size: 12px;
 }
 
 .list-frame {
@@ -295,22 +319,47 @@ class TodoApp(Gtk.Application):
 		input_row.append(entry)
 		input_row.append(add_button)
 
-		active_button = Gtk.ToggleButton()
-		active_button.add_css_class("segment-button")
-		active_button.set_hexpand(True)
-		active_button.set_active(True)
-		completed_button = Gtk.ToggleButton()
-		completed_button.add_css_class("segment-button")
-		completed_button.set_hexpand(True)
+		def create_dock_button(icon_name, tooltip):
+			button = Gtk.ToggleButton()
+			button.add_css_class("dock-button")
+			button.set_hexpand(True)
+			button.set_tooltip_text(tooltip)
 
-		segment_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=3)
-		segment_row.add_css_class("segment-row")
-		segment_row.append(active_button)
-		segment_row.append(completed_button)
+			content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+			content.add_css_class("dock-button-content")
+			content.set_halign(Gtk.Align.CENTER)
+			content.set_valign(Gtk.Align.CENTER)
+
+			icon = Gtk.Image.new_from_icon_name(icon_name)
+			icon.set_pixel_size(20)
+			label = Gtk.Label()
+			label.add_css_class("dock-label")
+
+			content.append(icon)
+			content.append(label)
+			button.set_child(content)
+			return button, label
+
+		active_button, active_dock_label = create_dock_button("view-list-symbolic", "Show active todos")
+		active_button.set_active(True)
+		completed_button, completed_dock_label = create_dock_button(
+			"emblem-ok-symbolic",
+			"Show completed todos",
+		)
+
+		dock_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+		dock_row.add_css_class("dock-row")
+		dock_row.set_halign(Gtk.Align.CENTER)
+		dock_row.set_valign(Gtk.Align.END)
+		dock_row.set_margin_bottom(12)
+		dock_row.append(active_button)
+		dock_row.append(completed_button)
 
 		stack = Gtk.Stack()
+		stack.add_css_class("content-stack")
 		stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
 		stack.set_vexpand(True)
+		stack.set_margin_bottom(74)
 		active_listbox = create_todo_list()
 		completed_listbox = create_todo_list()
 
@@ -327,6 +376,12 @@ class TodoApp(Gtk.Application):
 		stack.add_named(active_scroller, "active")
 		stack.add_named(completed_scroller, "completed")
 
+		content_overlay = Gtk.Overlay()
+		content_overlay.add_css_class("content-overlay")
+		content_overlay.set_vexpand(True)
+		content_overlay.set_child(stack)
+		content_overlay.add_overlay(dock_row)
+
 		def selected_list_name():
 			return stack.get_visible_child_name()
 
@@ -342,8 +397,8 @@ class TodoApp(Gtk.Application):
 			active_count = len(self.todos["active"])
 			completed_count = len(self.todos["completed"])
 			count_label.set_text(f"{active_count} active")
-			active_button.set_label(f"Active {active_count}")
-			completed_button.set_label(f"Completed {completed_count}")
+			active_dock_label.set_text(f"Active {active_count}")
+			completed_dock_label.set_text(f"Done {completed_count}")
 			refresh_todo_lists(
 				self.todos,
 				active_listbox,
@@ -418,8 +473,7 @@ class TodoApp(Gtk.Application):
 
 		box.append(header)
 		box.append(input_row)
-		box.append(segment_row)
-		box.append(stack)
+		box.append(content_overlay)
 
 		window.set_child(box)
 		refresh()
