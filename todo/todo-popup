@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+
+import gi
+import json
+import os
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gtk
+
+TODO_FILE = os.path.expanduser("~/.local/share/todo-popup.json")
+os.makedirs(os.path.dirname(TODO_FILE), exist_ok=True)
+
+def load_todos():
+	if not os.path.exists(TODO_FILE):
+		return []
+	with open(TODO_FILE, "r", encoding="utf-8") as f:
+		return json.load(f)
+
+def save_todos(todos):
+	with open(TODO_FILE, "w", encoding="utf-8") as f:
+		json.dump(todos, f, indent=2)
+
+class TodoApp(Gtk.Application):
+	def __init__(self):
+		super().__init__(application_id="com.yikang.todo.popup")
+		self.todos = load_todos()
+
+	def do_activate(self):
+		window = Gtk.ApplicationWindow(application=self)
+		window.set_title("Todo")
+		window.set_default_size(320,420)
+		window.set_resizable(False)
+		window.set_decorated(False)
+		
+		box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+		box.set_margin_top(12)
+		box.set_margin_bottom(12)
+		box.set_margin_start(12)
+		box.set_margin_end(12)
+
+		entry = Gtk.Entry()
+		entry.set_placeholder_text("Add new todo...")
+
+		listbox = Gtk.ListBox()
+
+		def refresh():
+			while child:= listbox.get_first_child():
+				listbox.remove(child)
+			for todo in self.todos:
+				row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+			
+				label = Gtk.Label(label=todo)
+				label.set_xalign(0)
+				label.set_hexpand(True)
+
+				delete_btn = Gtk.Button(label="Done")
+
+				def delete_clicked(btn, item=todo):
+					self.todos.remove(item)
+					save_todos(self.todos)
+					refresh()
+
+				delete_btn.connect("clicked", delete_clicked)
+				row_box.append(label)
+				row_box.append(delete_btn)
+
+				row = Gtk.ListBoxRow()
+				row.set_child(row_box)
+				listbox.append(row)
+		def add_todo(_):
+			text = entry.get_text().strip()
+			if text:
+				self.todos.append(text)
+				save_todos(self.todos)
+				entry.set_text("")
+				refresh()
+			
+		entry.connect("activate", add_todo)
+
+		add_btn = Gtk.Button(label="Add")
+		add_btn.connect("clicked", add_todo)
+	
+		box.append(entry)
+		box.append(add_btn)
+		box.append(listbox)
+
+		window.set_child(box)
+		refresh()
+		window.present()
+
+	def do_shutdown(self):
+		save_todos(self.todos)
+		super().do_shutdown()
+
+app = TodoApp()
+app.run()
