@@ -5,16 +5,22 @@ import json
 import os
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk
+from gi.repository import Gtk, Gdk
 
 TODO_FILE = os.path.expanduser("~/.local/share/todo-popup.json")
 os.makedirs(os.path.dirname(TODO_FILE), exist_ok=True)
 
 def load_todos():
 	if not os.path.exists(TODO_FILE):
-		return []
+		return {"active": [], "completed": []}
 	with open(TODO_FILE, "r", encoding="utf-8") as f:
-		return json.load(f)
+		data = json.load(f)
+	if isinstance(data, list):
+		return {"active": data, "completed": []}
+	return {
+		"active": data.get("active", []),
+		"completed": data.get("completed", []),
+	}
 
 def save_todos(todos):
 	with open(TODO_FILE, "w", encoding="utf-8") as f:
@@ -41,22 +47,52 @@ class TodoApp(Gtk.Application):
 		entry = Gtk.Entry()
 		entry.set_placeholder_text("Add new todo...")
 
-		listbox = Gtk.ListBox()
+		notebook = Gtk.Notebook()
+		active_listbox = Gtk.ListBox()
+		completed_listbox = Gtk.ListBox()
+		notebook.append_page(active_listbox, Gtk.Label(label="Active"))
+		notebook.append_page(completed_listbox, Gtk.Label(label="Completed"))
 
 		def refresh():
-			while child:= listbox.get_first_child():
-				listbox.remove(child)
-			for todo in self.todos:
+			while child:= active_listbox.get_first_child():
+				active_listbox.remove(child)
+			while child:= completed_listbox.get_first_child():
+				completed_listbox.remove(child)
+
+			for index, todo in enumerate(self.todos["active"]):
 				row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
 			
 				label = Gtk.Label(label=todo)
 				label.set_xalign(0)
 				label.set_hexpand(True)
 
-				delete_btn = Gtk.Button(label="Done")
+				done_btn = Gtk.Button(label="Done")
 
-				def delete_clicked(btn, item=todo):
-					self.todos.remove(item)
+				def done_clicked(btn, item_index=index):
+					item = self.todos["active"].pop(item_index)
+					self.todos["completed"].append(item)
+					save_todos(self.todos)
+					refresh()
+
+				done_btn.connect("clicked", done_clicked)
+				row_box.append(label)
+				row_box.append(done_btn)
+
+				row = Gtk.ListBoxRow()
+				row.set_child(row_box)
+				active_listbox.append(row)
+
+			for index, todo in enumerate(self.todos["completed"]):
+				row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+			
+				label = Gtk.Label(label=todo)
+				label.set_xalign(0)
+				label.set_hexpand(True)
+
+				delete_btn = Gtk.Button(label="Delete")
+
+				def delete_clicked(btn, item_index=index):
+					del self.todos["completed"][item_index]
 					save_todos(self.todos)
 					refresh()
 
@@ -66,11 +102,12 @@ class TodoApp(Gtk.Application):
 
 				row = Gtk.ListBoxRow()
 				row.set_child(row_box)
-				listbox.append(row)
+				completed_listbox.append(row)
+
 		def add_todo(_):
 			text = entry.get_text().strip()
 			if text:
-				self.todos.append(text)
+				self.todos["active"].append(text)
 				save_todos(self.todos)
 				entry.set_text("")
 				refresh()
@@ -79,10 +116,35 @@ class TodoApp(Gtk.Application):
 
 		add_btn = Gtk.Button(label="Add")
 		add_btn.connect("clicked", add_todo)
+
+		def delete_selected():
+			if notebook.get_current_page() == 0:
+				selected_row = active_listbox.get_selected_row()
+				if selected_row:
+					del self.todos["active"][selected_row.get_index()]
+			else:
+				selected_row = completed_listbox.get_selected_row()
+				if selected_row:
+					del self.todos["completed"][selected_row.get_index()]
+			if selected_row:
+				save_todos(self.todos)
+				refresh()
+
+		def key_pressed(controller, keyval, keycode, state):
+			if window.get_focus() == entry:
+				return False
+			if keyval == Gdk.KEY_d:
+				delete_selected()
+				return True
+			return False
+
+		key_controller = Gtk.EventControllerKey()
+		key_controller.connect("key-pressed", key_pressed)
+		window.add_controller(key_controller)
 	
 		box.append(entry)
 		box.append(add_btn)
-		box.append(listbox)
+		box.append(notebook)
 
 		window.set_child(box)
 		refresh()
