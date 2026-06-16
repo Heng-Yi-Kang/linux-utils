@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 import gi
 
 gi.require_version("Gtk", "4.0")
@@ -8,25 +11,108 @@ from .storage import load_todos, save_todos
 from .widgets import create_todo_list, refresh_todo_lists
 
 
-APP_CSS = """
-window.todo-window {
-	background: @window_bg_color;
-	color: @window_fg_color;
+ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+THEME_SYSTEM = "system"
+THEME_LIGHT = "light"
+THEME_DARK = "dark"
+THEME_VALUES = {THEME_SYSTEM, THEME_LIGHT, THEME_DARK}
+
+DEFAULT_THEME_CONFIG = {
+	"TODO_THEME": THEME_SYSTEM,
+	"TODO_LIGHT_FG": "#111827",
+	"TODO_LIGHT_MUTED_ALPHA": "0.66",
+	"TODO_LIGHT_SUBTLE_ALPHA": "0.56",
+	"TODO_DARK_FG": "#f8fafc",
+	"TODO_DARK_MUTED_ALPHA": "0.72",
+	"TODO_DARK_SUBTLE_ALPHA": "0.62",
 }
 
+
+def parse_env_file(path):
+	values = {}
+	if not path.exists():
+		return values
+
+	for line in path.read_text(encoding="utf-8").splitlines():
+		line = line.strip()
+		if not line or line.startswith("#") or "=" not in line:
+			continue
+		key, value = line.split("=", 1)
+		key = key.strip()
+		value = value.strip().strip("\"'")
+		if key:
+			values[key] = value
+	return values
+
+
+def load_theme_config():
+	env_file_values = parse_env_file(ENV_PATH)
+	config = DEFAULT_THEME_CONFIG | env_file_values
+	for key in DEFAULT_THEME_CONFIG:
+		if key in os.environ:
+			config[key] = os.environ[key]
+
+	config["TODO_THEME"] = config["TODO_THEME"].strip().lower()
+	if config["TODO_THEME"] not in THEME_VALUES:
+		config["TODO_THEME"] = THEME_SYSTEM
+	return config
+
+
+def build_theme_css(config):
+	theme = config["TODO_THEME"]
+	light_fg = config["TODO_LIGHT_FG"]
+	dark_fg = config["TODO_DARK_FG"]
+
+	if theme == THEME_DARK:
+		base_fg = dark_fg
+		media_css = ""
+	elif theme == THEME_LIGHT:
+		base_fg = light_fg
+		media_css = ""
+	else:
+		base_fg = light_fg
+		media_css = f"""
+@media (prefers-color-scheme: dark) {{
+	window.todo-window {{
+		--todo-fg: {dark_fg};
+		--todo-muted-fg: alpha({dark_fg}, {config["TODO_DARK_MUTED_ALPHA"]});
+		--todo-subtle-fg: alpha({dark_fg}, {config["TODO_DARK_SUBTLE_ALPHA"]});
+	}}
+}}
+"""
+
+	base_muted_alpha = config["TODO_DARK_MUTED_ALPHA"] if theme == THEME_DARK else config["TODO_LIGHT_MUTED_ALPHA"]
+	base_subtle_alpha = config["TODO_DARK_SUBTLE_ALPHA"] if theme == THEME_DARK else config["TODO_LIGHT_SUBTLE_ALPHA"]
+
+	return f"""
+window.todo-window {{
+	--todo-fg: {base_fg};
+	--todo-muted-fg: alpha({base_fg}, {base_muted_alpha});
+	--todo-subtle-fg: alpha({base_fg}, {base_subtle_alpha});
+	background: @window_bg_color;
+	color: var(--todo-fg);
+}}
+
+window.todo-window:backdrop {{
+	color: var(--todo-fg);
+}}
+{media_css}
+""" + """
 .app-shell {
 	background: @window_bg_color;
+	color: var(--todo-fg);
 	padding: 18px;
 }
 
 .title-label {
+	color: var(--todo-fg);
 	font-size: 22px;
 	font-weight: 700;
 }
 
 .count-label,
 .empty-state {
-	color: alpha(currentColor, 0.62);
+	color: var(--todo-muted-fg);
 }
 
 .count-label {
@@ -38,6 +124,7 @@ window.todo-window {
 	background: alpha(currentColor, 0.045);
 	border: 1px solid alpha(currentColor, 0.10);
 	border-radius: 10px;
+	color: var(--todo-fg);
 	padding: 4px;
 }
 
@@ -45,7 +132,12 @@ window.todo-window {
 	background: transparent;
 	border: 0;
 	box-shadow: none;
+	color: var(--todo-fg);
 	min-height: 40px;
+}
+
+.todo-entry placeholder {
+	color: var(--todo-subtle-fg);
 }
 
 .todo-entry:focus {
@@ -62,11 +154,13 @@ window.todo-window {
 .segment-row {
 	background: alpha(currentColor, 0.055);
 	border-radius: 10px;
+	color: var(--todo-fg);
 	padding: 3px;
 }
 
 .segment-button {
 	border-radius: 8px;
+	color: var(--todo-fg);
 	font-weight: 600;
 	min-height: 34px;
 }
@@ -80,15 +174,18 @@ window.todo-window {
 	background: alpha(currentColor, 0.035);
 	border: 1px solid alpha(currentColor, 0.08);
 	border-radius: 12px;
+	color: var(--todo-fg);
 	padding: 6px;
 }
 
 .todo-list {
 	background: transparent;
+	color: var(--todo-fg);
 }
 
 .todo-row {
 	border-radius: 9px;
+	color: var(--todo-fg);
 	margin: 2px;
 }
 
@@ -101,11 +198,12 @@ window.todo-window {
 }
 
 .todo-label {
+	color: var(--todo-fg);
 	font-size: 14px;
 }
 
 .completed-label {
-	color: alpha(currentColor, 0.55);
+	color: var(--todo-subtle-fg);
 }
 
 .todo-check check:checked {
@@ -115,7 +213,7 @@ window.todo-window {
 
 .delete-button {
 	border-radius: 7px;
-	color: alpha(currentColor, 0.55);
+	color: var(--todo-subtle-fg);
 	min-height: 30px;
 	min-width: 30px;
 }
@@ -139,14 +237,22 @@ window.todo-window {
 class TodoApp(Gtk.Application):
 	def __init__(self):
 		super().__init__(application_id="com.yikang.todo.popup")
+		self.theme_config = load_theme_config()
 		self.todos = load_todos()
 
 	def do_startup(self):
 		Gtk.Application.do_startup(self)
+		if self.theme_config["TODO_THEME"] != THEME_SYSTEM:
+			settings = Gtk.Settings.get_default()
+			if settings:
+				settings.set_property(
+					"gtk-application-prefer-dark-theme",
+					self.theme_config["TODO_THEME"] == THEME_DARK,
+				)
 		display = Gdk.Display.get_default()
 		if display:
 			provider = Gtk.CssProvider()
-			provider.load_from_data(APP_CSS.encode())
+			provider.load_from_data(build_theme_css(self.theme_config).encode())
 			Gtk.StyleContext.add_provider_for_display(
 				display,
 				provider,
