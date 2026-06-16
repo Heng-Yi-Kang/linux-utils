@@ -247,6 +247,59 @@ window.todo-window:backdrop {{
 	color: #dc2626;
 }
 
+.delete-dialog {
+	background: @window_bg_color;
+	color: var(--todo-fg);
+}
+
+.delete-dialog-content {
+	color: var(--todo-fg);
+	padding: 22px 22px 10px;
+}
+
+.delete-dialog-title {
+	color: var(--todo-fg);
+	font-size: 18px;
+	font-weight: 700;
+}
+
+.delete-dialog-detail {
+	background: alpha(currentColor, 0.045);
+	border: 1px solid alpha(currentColor, 0.10);
+	border-radius: 8px;
+	color: var(--todo-muted-fg);
+	padding: 10px 12px;
+}
+
+.dialog-action-button {
+	border-radius: 8px;
+	font-weight: 600;
+	min-height: 34px;
+	min-width: 88px;
+	padding: 0 14px;
+}
+
+.dialog-action-button:focus {
+	background: #0d9488;
+	box-shadow: 0 0 0 3px alpha(#0d9488, 0.30);
+	color: white;
+}
+
+.dialog-delete-button {
+	color: #dc2626;
+}
+
+.dialog-delete-button:hover {
+	background: alpha(#ef4444, 0.12);
+	color: #dc2626;
+}
+
+.dialog-delete-button:focus {
+	background: #dc2626;
+	box-shadow: 0 0 0 3px alpha(#ef4444, 0.30);
+	color: white;
+}
+
 .empty-row {
 	margin: 24px 8px;
 }
@@ -443,19 +496,46 @@ class TodoApp(Gtk.Application):
 				return False
 
 			todo_text = self.todos[list_name][index]
-			dialog = Gtk.AlertDialog()
+			dialog = Gtk.Dialog(title="Delete task?", transient_for=window, modal=True)
+			dialog.add_css_class("delete-dialog")
 			dialog.set_modal(True)
-			dialog.set_message("Delete this task?")
-			dialog.set_detail(todo_text)
-			dialog.set_buttons(("Cancel", "Delete"))
-			dialog.set_cancel_button(0)
-			dialog.set_default_button(0)
+			dialog.set_resizable(False)
 
-			def on_response(_dialog, result, _data):
-				if _dialog.choose_finish(result) == 1:
+			content = dialog.get_content_area()
+			content.add_css_class("delete-dialog-content")
+			content.set_spacing(12)
+
+			title_label = Gtk.Label(label="Delete this task?")
+			title_label.add_css_class("delete-dialog-title")
+			title_label.set_xalign(0)
+
+			detail_label = Gtk.Label(label=todo_text)
+			detail_label.add_css_class("delete-dialog-detail")
+			detail_label.set_wrap(True)
+			detail_label.set_xalign(0)
+			detail_label.set_width_chars(34)
+			detail_label.set_max_width_chars(34)
+
+			content.append(title_label)
+			content.append(detail_label)
+
+			cancel_button = dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+			cancel_button.add_css_class("dialog-action-button")
+
+			delete_button = dialog.add_button("Delete", Gtk.ResponseType.ACCEPT)
+			delete_button.add_css_class("dialog-action-button")
+			delete_button.add_css_class("dialog-delete-button")
+
+			dialog.set_default_response(Gtk.ResponseType.CANCEL)
+			dialog.set_focus(cancel_button)
+
+			def on_response(_dialog, response_id):
+				if response_id == Gtk.ResponseType.ACCEPT:
 					delete_at(list_name, index)
+				_dialog.destroy()
 
-			dialog.choose(window, None, on_response, None)
+			dialog.connect("response", on_response)
+			dialog.present()
 			return True
 
 		def delete_selected():
