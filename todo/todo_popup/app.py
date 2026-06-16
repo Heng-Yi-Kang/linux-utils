@@ -365,7 +365,7 @@ class TodoApp(Gtk.Application):
 		add_button = Gtk.Button.new_from_icon_name("list-add-symbolic")
 		add_button.add_css_class("add-button")
 		add_button.add_css_class("flat")
-		add_button.set_tooltip_text("Add todo")
+		add_button.set_tooltip_text("Add todo (Ctrl+N)")
 
 		input_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
 		input_row.add_css_class("input-row")
@@ -470,6 +470,14 @@ class TodoApp(Gtk.Application):
 				entry.set_text("")
 				set_visible_list("active")
 				refresh()
+				return True
+			return False
+
+		def focus_new_todo():
+			set_visible_list("active")
+			entry.grab_focus()
+			entry.set_position(-1)
+			return True
 
 		entry.connect("activate", add_todo)
 		add_button.connect("clicked", add_todo)
@@ -570,6 +578,8 @@ class TodoApp(Gtk.Application):
 			):
 				switch_to_next_list()
 				return True
+			if state & Gdk.ModifierType.CONTROL_MASK and keyval in (Gdk.KEY_n, Gdk.KEY_N):
+				return focus_new_todo()
 			if window.get_focus() == entry:
 				return False
 			if keyval in (Gdk.KEY_Delete, Gdk.KEY_BackSpace, Gdk.KEY_d):
